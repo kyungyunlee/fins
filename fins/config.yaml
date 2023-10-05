@@ -1,0 +1,52 @@
+sample_rate: &sr 48000 
+
+dataset:
+  params:
+    sr: *sr
+    input_duration: 2.74
+    input_length : &input_length 131072
+    rir_duration: &rir_duration 1.0
+    direct_delay : 100
+    peak_norm_value : &peak_norm_value 0.5
+    source_norm_value : -25.0
+
+model:
+  name: "model.FilteredNoiseShaper"
+  params: 
+    num_filters : &num_filters 10
+    filter_order : 1023
+    sr: *sr
+    rir_duration: *rir_duration
+    input_length : *input_length
+    early_length : &early_length 2400
+    decoder_input_length : 400
+    noise_condition_length : &noise_condition_length 16
+    z_size : 128
+    min_snr : 15
+    max_snr : 50
+    normalize : "rms"
+    rms_level : &rms_level 0.01 
+
+train:
+  params:
+    sr: *sr
+    batch_size: 32
+    num_workers: 1
+    lr: 0.000055
+    lr_step_size : 80
+    lr_decay_factor : 0.8
+    gradient_clip_value: 5
+    num_epochs : 5000
+    validation_interval: 1
+    evaluation_interval : 10
+    checkpoint_interval: 1
+    random_plot_interval : 1
+    logging_dir : "logs"
+    checkpoint_dir : "checkpoints"
+    early_length: *early_length
+    peak_norm_value: *peak_norm_value
+    input_length: *input_length
+    rms_level: *rms_level
+    rir_duration: *rir_duration
+    noise_condition_length : *noise_condition_length
+    num_filters : *num_filters

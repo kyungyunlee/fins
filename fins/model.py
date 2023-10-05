@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 from torch.nn.utils import spectral_norm
@@ -6,6 +5,7 @@ from torch.nn.utils import spectral_norm
 from fins.utils.audio import (
     get_octave_filters,
 )
+
 
 class EncoderBlock(nn.Module):
     def __init__(self, in_channels, out_channels, use_batchnorm=True):
@@ -22,9 +22,12 @@ class EncoderBlock(nn.Module):
             )
         else:
             self.conv = nn.Sequential(
-                nn.Conv1d(in_channels, out_channels, kernel_size=15, stride=2, padding=7), nn.PReLU(),
+                nn.Conv1d(in_channels, out_channels, kernel_size=15, stride=2, padding=7),
+                nn.PReLU(),
             )
-            self.skip_conv = nn.Sequential(nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=2, padding=0),)
+            self.skip_conv = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=2, padding=0),
+            )
 
     def forward(self, x):
         out = self.conv(x)
@@ -64,14 +67,17 @@ class Encoder(nn.Module):
 
 class UpsampleNet(nn.Module):
     def __init__(self, input_size, output_size, upsample_factor):
-
         super(UpsampleNet, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
         self.upsample_factor = upsample_factor
 
         layer = nn.ConvTranspose1d(
-            input_size, output_size, upsample_factor * 2, upsample_factor, padding=upsample_factor // 2,
+            input_size,
+            output_size,
+            upsample_factor * 2,
+            upsample_factor,
+            padding=upsample_factor // 2,
         )
         nn.init.orthogonal_(layer.weight)
         self.layer = spectral_norm(layer)
@@ -128,7 +134,8 @@ class DecoderBlock(nn.Module):
         self.condition_batchnorm2 = ConditionalBatchNorm1d(out_channels, condition_length)
 
         self.second_stack = nn.Sequential(
-            nn.PReLU(), nn.Conv1d(out_channels, out_channels, kernel_size=15, dilation=1, padding=7),
+            nn.PReLU(),
+            nn.Conv1d(out_channels, out_channels, kernel_size=15, dilation=1, padding=7),
         )
 
         self.residual1 = nn.Sequential(
@@ -139,13 +146,15 @@ class DecoderBlock(nn.Module):
         self.condition_batchnorm3 = ConditionalBatchNorm1d(out_channels, condition_length)
 
         self.third_stack = nn.Sequential(
-            nn.PReLU(), nn.Conv1d(out_channels, out_channels, kernel_size=15, dilation=4, padding=28),
+            nn.PReLU(),
+            nn.Conv1d(out_channels, out_channels, kernel_size=15, dilation=4, padding=28),
         )
 
         self.condition_batchnorm4 = ConditionalBatchNorm1d(out_channels, condition_length)
 
         self.fourth_stack = nn.Sequential(
-            nn.PReLU(), nn.Conv1d(out_channels, out_channels, kernel_size=15, dilation=8, padding=56),
+            nn.PReLU(),
+            nn.Conv1d(out_channels, out_channels, kernel_size=15, dilation=8, padding=56),
         )
 
     def forward(self, enc_out, condition):
@@ -192,7 +201,7 @@ class Decoder(nn.Module):
     def forward(self, v, condition):
         inputs = self.preprocess(v)
         outputs = inputs
-        for (i, layer) in enumerate(self.blocks):
+        for i, layer in enumerate(self.blocks):
             outputs = layer(outputs, condition)
         outputs = self.postprocess(outputs)
 
@@ -201,7 +210,6 @@ class Decoder(nn.Module):
         late = self.sigmoid(late)
 
         return direct_early, late
-
 
 
 class FilteredNoiseShaper(nn.Module):
@@ -233,7 +241,7 @@ class FilteredNoiseShaper(nn.Module):
         # Octave band pass initialization
         octave_filters = get_octave_filters()
         self.filter.weight.data = torch.FloatTensor(octave_filters)
-       
+
         # self.filter.bias.data.zero_()
 
         # Mask for direct and early part
@@ -241,7 +249,6 @@ class FilteredNoiseShaper(nn.Module):
         mask[:, :, : self.config.early_length] = 1.0
         self.register_buffer("mask", mask)
         self.output_conv = nn.Conv1d(config.num_filters + 1, 1, kernel_size=1, stride=1)
-
 
     def forward(self, x, stochastic_noise, noise_condition):
         """
@@ -282,15 +289,13 @@ class FilteredNoiseShaper(nn.Module):
         rir = self.output_conv(rir)
 
         return rir
-    
-
 
     if __name__ == "__main__":
         from fins.utils.utils import load_config
         from fins.model import FilteredNoiseShaper
-        
+
         batch_size = 1
-        input_size = 131072   
+        input_size = 131072
         noise_size = 16
         target_size = 48000
 

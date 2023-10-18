@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 import pyloudnorm as pyln
 
-from fins.utils.dsp import load_audio, crop_rir, apply_exponential_weighting, peak_normalize
+from fins.utils.audio import load_audio, crop_rir
 
 
 class ReverbDataset(Dataset):
@@ -32,11 +32,8 @@ class ReverbDataset(Dataset):
         self.rir_length = int(config.rir_duration * config.sr)  # 1 sec = 48000 samples
         self.input_signal_length = config.input_length  # 131070 samples
 
-        # Group RIRs per room
-        self.rir_room_list = list(self.rir_dict.keys())
-
     def __len__(self):
-        return len(self.rir_dict)
+        return len(self.rir_files)
 
     def __getitem__(self, idx):
         rir_file = self.rir_files[idx]
@@ -77,6 +74,7 @@ class ReverbDataset(Dataset):
         cropped_rir = crop_rir(rir, target_length=self.rir_length)
 
         # TODO : normalize rir
+        rir /= np.max(np.abs(rir)) * 0.999
 
         return cropped_rir
 
@@ -104,23 +102,18 @@ class ReverbDataset(Dataset):
         return target_audio
 
     def _get_source(self):
-        source_idx = random.randint(0, len(self.source_files) - 1)
-        source_file, source_loudness, candidate_start_times = self.source_files[source_idx]
-        offset = random.choice(candidate_start_times)
-
-        source = self._load_and_pad(source_file, offset, duration=3.0, target_length=self.input_signal_length)
+        source_file = random.choice(self.source_files)
+        source = self._load_and_pad(source_file, offset=0, duration=3.0, target_length=self.input_signal_length)
 
         # Remove empty
         rms = np.sqrt(np.mean(source**2))
         while rms < 0.001:
             # Re select segment
-            source_idx = random.randint(0, len(self.source_files) - 1)
-            source_file, source_loudness, candidate_start_times = self.source_files[source_idx]
-            offset = random.choice(candidate_start_times)
-            source = self._load_and_pad(source_file, offset, duration=3.0, target_length=self.input_signal_length)
+            source_file = random.choice(self.source_files)
+            source = self._load_and_pad(source_file, offset=0, duration=3.0, target_length=self.input_signal_length)
             rms = np.sqrt(np.mean(source**2))
 
-        # Normalize source at random loudness
+        # Manage source loudness
         source *= 0.1
 
         source = np.float32(source)

@@ -279,7 +279,6 @@ class FilteredNoiseShaper(nn.Module):
         # Apply mask to the filtered noise to get the late part
         late_part = filtered_noise * late_mask
 
-        # direct_early = shape(batch, 1, num_samples)
         # Zero out sample beyond 2400 for direct early part
         direct_early = torch.mul(direct_early, self.mask)
         # Concat direct,early with late and perform convolution

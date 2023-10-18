@@ -3,6 +3,37 @@ import scipy.signal
 import numpy as np
 from typing import List
 from fft_conv_pytorch import fft_conv
+import librosa
+
+
+def load_audio(path, target_sr: int = 48000, mono=False, offset=0.0, duration=None) -> np.ndarray:
+    """
+    return y : shape=(n_channels, n_samples)
+    """
+    y, orig_sr = librosa.load(path, sr=None, mono=mono, offset=offset, duration=duration)
+
+    if target_sr:
+        y = resample(y, orig_sr=orig_sr, target_sr=target_sr)
+
+    return np.atleast_2d(y)
+
+
+def resample(signal: np.ndarray, orig_sr: int, target_sr: int, **kwargs) -> np.ndarray:
+    """signal: (N,) or (num_channel, N)"""
+    return librosa.resample(y=signal, orig_sr=orig_sr, target_sr=target_sr, res_type="polyphase", **kwargs)
+
+
+def crop_rir(rir, target_length):
+    n_channels, num_samples = rir.shape
+
+    # by default: all the test rirs will be aligned such that direct impulse starts with 90 sample delay@48kHz
+    if num_samples < target_length:
+        out_rir = np.zeros((n_channels, target_length))
+        out_rir[:, :num_samples] = rir
+    else:
+        out_rir = rir[:, :target_length]
+
+    return out_rir
 
 
 def get_octave_filters():
@@ -84,3 +115,54 @@ def add_noise_batch(batch_signal, noise, snr_db):
     modified_noise = torch.mul(noise, mean_square_noise)
 
     return batch_signal + modified_noise
+
+
+def rms_normalize(sig: np.ndarray, rms_level=0.1):
+    """
+    sig : shape=(channel, signal_length)
+    rms_level : linear gain value
+    """
+    # linear rms level and scaling factor
+    # r = 10 ** (rms_level / 10.0)
+    a = np.sqrt((sig.shape[1] * rms_level**2) / (np.sum(sig**2) + 1e-7))
+
+    # normalize
+    y = sig * a
+    return y
+
+
+def rms_normalize_batch(sig: torch.tensor, rms_level=0.1):
+    """
+    sig : shape=(batch, channel, signal_length)
+    """
+    # linear rms level and scaling factor
+    # r = 10 ** (rms_level / 10.0)
+    a = torch.sqrt((sig.size(2) * rms_level**2) / (torch.sum(sig**2, dim=2, keepdims=True) + 1e-7))
+    # normalize
+    y = sig * a
+
+    return y
+
+
+def peak_normalize(sig: np.ndarray, peak_val):
+    peak = np.max(np.abs(sig[:, :512]), axis=-1, keepdims=True)
+    sig = np.divide(sig, peak + 1e-7)
+    sig = sig * peak_val
+    return sig
+
+
+def peak_normalize_batch(sig, peak_val):
+    """
+    sig : shape=(batch, channel, signal_length)
+    """
+    peak = torch.max(torch.abs(sig), dim=2, keepdim=True).values
+    sig = torch.div(sig, peak)
+    sig *= peak_val
+    return sig
+
+
+def audio_normalize_batch(sig, type, rms_level=0.1, peak_val=1.0):
+    if type == "peak":
+        return peak_normalize_batch(sig, peak_val)
+    else:
+        return rms_normalize_batch(sig, rms_level)

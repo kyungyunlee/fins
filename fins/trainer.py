@@ -91,7 +91,7 @@ class Trainer:
                 self.scheduler.load_state_dict(state_dicts["sched_state_dict"])
 
     def make_batch_data(self, batch):
-        flipped_rir = rir_data["flipped_rir"].to(self.device)
+        flipped_rir = batch["flipped_rir"].to(self.device)
         source = batch['source'].to(self.device)
 
         reverberated_source = batch_convolution(source, flipped_rir)
@@ -164,15 +164,29 @@ class Trainer:
                         epoch,
                         "batch",
                         i,
-                        len(self.train_data),
-                        "total",
+                        "total loss",
                         stft_loss.item(),
                     )
+
+            # Validate
+            if (epoch + 1) % self.config.validation_interval == 0:
+                print("Validating...") 
+                self.model.eval()
+
+                # PRINT BATCH NORM RUNNING STATS
+                with torch.no_grad():
+                    valid_loss = self.validate()
+                    print (f"Validation loss : {valid_loss}")
+
+                    self.writer.add_scalar(f"total/valid", valid_loss, global_step=epoch)
+
+                    self.writer.flush()
+
+                self.model.train()
 
             self.scheduler.step()
 
             # Log
-            print("Loggin with", self.gpu_id, "epoch", epoch)
             print(self.model_name)
             print(
                 f"Train {epoch}/{self.config.num_epochs} - loss: {total_loss.item():.3f}, stft_loss: {stft_loss.item():.3f}, sc_loss: {sc_loss:.3f}, mag_loss: {mag_loss:.3f}"
@@ -211,6 +225,36 @@ class Trainer:
 
                 torch.save(state_dicts, os.path.join(self.model_checkpoint_dir, f"epoch-{epoch}.pt"))
 
+    def validate(self) :
+
+        total_loss = 0.0 
+        for i, batch in enumerate(self.valid_data):
+            rir = batch['rir'].to(self.device)
+
+            # Make batch data
+            (
+                reverberated_source_with_noise,
+                reverberated_source,
+                batch_stochastic_noise,
+                batch_noise_condition,
+            ) = self.make_batch_data(batch)
+
+            # Model forward
+            predicted_rir = self.model(
+                reverberated_source_with_noise, batch_stochastic_noise, batch_noise_condition
+            )
+
+            # Compute loss
+            stft_loss_dict = self.stft_loss_fn(predicted_rir, rir)
+            stft_loss = stft_loss_dict["total"].item()
+
+            total_loss = total_loss + stft_loss
+        
+        n_valid_data = len(self.valid_data)
+        return total_loss / n_valid_data
+
+
+
     def plot(self, batch, nth_batch, epoch):
         print("Plotting...")
         # Make batch data
@@ -226,10 +270,8 @@ class Trainer:
 
         rir = batch['rir'].to(self.device)
         source = batch['source'].to(self.device)
-        noise = batch['noise'].to(self.device)
-        snr_db = batch['snr_db'].to(self.device)
-        rir_filename = batch['rir_f']
-        rt = batch['rt']
+        # noise = batch['noise'].to(self.device)
+        # snr_db = batch['snr_db'].to(self.device)
 
         flip_predicted_rir = torch.flip(predicted_rir, dims=[2])
 

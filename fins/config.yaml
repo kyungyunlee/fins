@@ -50,3 +50,11 @@ train:
     rir_duration: *rir_duration
     noise_condition_length : *noise_condition_length
     num_filters : *num_filters
+
+eval:
+  params : 
+    sr : *sr 
+    rms_level : *rms_level
+    noise_condition_length : *noise_condition_length
+    num_filters: *num_filters
+    input_length : *input_length
